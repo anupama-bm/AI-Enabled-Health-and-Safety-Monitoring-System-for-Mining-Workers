@@ -47,11 +47,19 @@ A custom-trained YOLOv8 model runs on a background thread, checking for:
 
 **Helmet · Goggles · Vest · Gloves · Boots**
 
-Detection uses asymmetric ON/OFF thresholds with temporal smoothing — which means no flickering. No false "PPE removed" alerts because someone shifted slightly in frame.
+Detection uses asymmetric ON/OFF thresholds with temporal smoothing.
 
-There's a specific behavioral fix that matters: when a worker steps away from the camera, **all PPE states clear instantly**. No inference buffer drain. No ghost states. The system behaves correctly in the situation where it matters most.
+<img width="1280" height="731" alt="image" src="https://github.com/user-attachments/assets/94a100c2-c62b-4121-b00e-040fa15ee6a0" />
 
-###  Respiratory Rate — Measured Without Touching Anything
+
+Worker in frame, helmet nowhere in sight
+<img width="1280" height="718" alt="image" src="https://github.com/user-attachments/assets/c50c0a32-173c-4b72-bb0b-21971cef7f08" />
+
+
+
+There's a specific behavioral fix that matters: when a worker steps away from the camera, **all PPE states clear instantly**. The system behaves correctly in the situation where it matters most.
+
+###  Respiratory Rate 
 
 **Farneback dense optical flow** is computed on a chest region-of-interest placed just below the detected face. The vertical motion signal oscillates with the rise and fall of breathing.
 
@@ -59,7 +67,7 @@ A **30-second rolling FFT analysis** extracts breaths per minute from that oscil
 
 Dense optical flow was chosen over sparse point tracking deliberately — it produces a more stable signal when the chest isn't perfectly still.
 
-###  Heart Rate & SpO₂ — From a Camera, Not a Pulse Oximeter
+###  Heart Rate & SpO₂ — From a Camera
 
 The green channel mean from a forehead ROI is sampled every frame. Over a 15-second window, **FFT analysis** extracts the dominant frequency corresponding to heart rate.
 
@@ -72,6 +80,14 @@ SpO₂ is approximated from the red-to-green channel variance ratio — an rPPG-
 Flask serves a web dashboard over the local network. Video streams via **MJPEG**. Stats poll every **100ms**.
 
 Multiple workers can be registered and monitored in separate sessions. Any device on the same network can watch.
+<img width="1280" height="727" alt="image" src="https://github.com/user-attachments/assets/260a8b6b-21c5-4acf-9811-aebc40bc5bbe" />
+
+Registering a new worker.
+<img width="1280" height="728" alt="image" src="https://github.com/user-attachments/assets/322a8aeb-8345-4768-886d-77ce556fe80a" />
+
+Active session: fatigue score, heart rate, respiration, SpO₂, PERCLOS, EAR, blink count, microsleeps, and yawns — all live, all in one view. Alerts log on the left as they fire.
+<img width="1280" height="731" alt="image" src="https://github.com/user-attachments/assets/2c240f34-c760-4a2e-bf39-9e0c30232c2a" />
+
 
 ---
 
