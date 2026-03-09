@@ -85,7 +85,7 @@ Training data was assembled by merging multiple PPE datasets sourced from Robofl
 
 ---
 
-##Why These Specific Tools##
+## Why These Specific Tools ##
 
 MediaPipe Face Mesh — 468 facial landmarks, fast on CPU, accurate enough to catch a microsleep.
 YOLOv8 — real-time PPE detection with no GPU needed. Trained on custom data without fighting the framework.
