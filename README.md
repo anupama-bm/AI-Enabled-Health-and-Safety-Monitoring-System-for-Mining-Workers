@@ -136,11 +136,8 @@ No template folders. No build steps. No configuration files.
 
 **Clone and run.**
 
----
 
 A standard webcam. A laptop. Python.
 
-
----
 
 *Built with MediaPipe · YOLOv8 · OpenCV · Flask · SciPy · Chart.js*
