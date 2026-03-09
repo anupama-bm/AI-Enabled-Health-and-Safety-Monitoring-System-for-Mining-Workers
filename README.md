@@ -79,7 +79,7 @@ SpO₂ is approximated from the red-to-green channel variance ratio — an rPPG-
 
 *The Known Limitations section of the code is completely upfront about where these estimates fall short. There's no overclaiming here.*
 
-###  Live Dashboard — Visible to Every Device on the Network
+###  Live Dashboard
 
 Flask serves a web dashboard over the local network. Video streams via **MJPEG**. Stats poll every **100ms**.
 
@@ -98,6 +98,25 @@ Active session: fatigue score, heart rate, respiration, SpO₂, PERCLOS, EAR, bl
 
 <img width="1280" height="731" alt="image" src="https://github.com/user-attachments/assets/2c240f34-c760-4a2e-bf39-9e0c30232c2a" />
 
+---
+
+## How It Works
+
+1. Register the worker — Name, ID, shift, gender. Done in under 10 seconds.
+
+2. Webcam starts streaming — Every frame enters the pipeline locally. Nothing is uploaded. Nothing leaves the machine.
+
+3. Face is mapped — MediaPipe places 468 landmarks on the face, isolating the eyes, mouth, and forehead. Every measurement that follows comes from this map.
+
+4. Fatigue is tracked — Eye Aspect Ratio is computed every frame. Sustained closure = microsleep. Mouth shape and duration = yawn. PERCLOS accumulates over 60 seconds. One fatigue score. Rises with real tiredness, not noise.
+
+5. Vital signs are estimated from the image — Chest movement via optical flow gives respiration rate. Green channel fluctuation on the forehead gives heart rate. Red-to-green variance ratio gives SpO₂. No wearable. No contact.
+
+6. PPE runs on a separate thread — YOLOv8 checks for helmet, goggles, vest, gloves, and boots in parallel. Neither thread waits on the other.
+
+7. Alerts fire instantly — Microsleep, missing helmet, low SpO₂ — logged the moment it happens, with a timestamp. Worker leaves the frame? All PPE states clear immediately.
+
+8. Dashboard updates every 100ms — Any browser on the local network. Live video, all vitals, all PPE status, all alerts — one view, always current.
 
 ---
 
