@@ -44,22 +44,21 @@ Flask-CORS was added as a single line to handle cross-origin requests from the b
 Getting Started
 
 Requirements: Python 3.9+, a webcam.
-bashgit clone https://github.com/anupama-bm/AI-Enabled-Health-and-Safety-Monitoring-System-for-Miners.git
-cd AI-Enabled-Health-and-Safety-Monitoring-System-for-Miners
 
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
-pip install -r requirements.txt
-python app.py
-Open http://localhost:5003. To access from another device on the same network, replace localhost with your machine's local IP.
+pip install -r requirements.txt<br>
+python app.py<br>
+Open http://localhost:5003. <br>
+To access from another device on the same network, replace localhost with your machine's local IP.
 
 
 miners/
-├── app.py          # Entire backend: pipeline, API, and HTML templates
-├── best.pt         # Custom-trained YOLOv8 PPE model
-├── yolov8n.pt      # Base weights used during training
-└── requirements.txt
-
+├── app.py          # Entire backend: pipeline, API, and HTML templates<br>
+├── best.pt         # Custom-trained YOLOv8 PPE model<br>
+├── yolov8n.pt      # Base weights used during training<br>
+└── requirements.txt<br>
+<br>
 Everything runs from a single file. No template folders, no build steps, no configuration files. Clone and run.
 
