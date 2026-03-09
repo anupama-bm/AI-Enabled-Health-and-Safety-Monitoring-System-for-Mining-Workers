@@ -54,11 +54,11 @@ Open http://localhost:5003. <br>
 To access from another device on the same network, replace localhost with your machine's local IP.
 
 
-miners/
-├── app.py          # Entire backend: pipeline, API, and HTML templates<br>
-├── best.pt         # Custom-trained YOLOv8 PPE model<br>
-├── yolov8n.pt      # Base weights used during training<br>
-└── requirements.txt<br>
+miners/<br>
+|--app.py          # Entire backend: pipeline, API, and HTML templates<br>
+|--best.pt         # Custom-trained YOLOv8 PPE model<br>
+|--yolov8n.pt      # Base weights used during training<br>
+|--requirements.txt<br>
 <br>
 Everything runs from a single file. No template folders, no build steps, no configuration files. Clone and run.
 
