@@ -85,7 +85,7 @@ Training data was assembled by merging multiple PPE datasets sourced from Robofl
 
 ---
 
-Why These Specific Tools
+##Why These Specific Tools##
 
 MediaPipe Face Mesh — 468 facial landmarks, fast on CPU, accurate enough to catch a microsleep.
 YOLOv8 — real-time PPE detection with no GPU needed. Trained on custom data without fighting the framework.
@@ -137,12 +137,6 @@ No template folders. No build steps. No configuration files.
 **Clone and run.**
 
 ---
-
-## The Philosophy
-
-The expensive version of this system exists. It runs on proprietary wearables, requires cloud infrastructure, and comes with an enterprise contract that most mining operations — especially smaller ones, especially in developing regions — will never sign.
-
-This is the version that doesn't require any of that.
 
 A standard webcam. A laptop. Python.
 
