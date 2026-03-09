@@ -1,4 +1,3 @@
-# ⛏️ SENTINEL
 ### *The AI Safety Monitor That Runs on What You Already Have*
 
 ---
