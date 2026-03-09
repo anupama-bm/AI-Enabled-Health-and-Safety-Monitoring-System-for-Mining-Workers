@@ -51,7 +51,7 @@ Detection uses asymmetric ON/OFF thresholds with temporal smoothing.
 
 
 
-<img width="1280" height="731" alt="image" src="https://github.com/user-attachments/assets/94a100c2-c62b-4121-b00e-040fa15ee6a0" />
+<img width="650" height="731" alt="image" src="https://github.com/user-attachments/assets/94a100c2-c62b-4121-b00e-040fa15ee6a0" />
 
 
 Worker in frame, helmet nowhere in sight
