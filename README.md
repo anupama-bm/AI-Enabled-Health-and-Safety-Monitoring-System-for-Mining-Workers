@@ -51,13 +51,13 @@ Detection uses asymmetric ON/OFF thresholds with temporal smoothing.
 
 
 
-<img width="650" height="731" alt="image" src="https://github.com/user-attachments/assets/94a100c2-c62b-4121-b00e-040fa15ee6a0" />
+<img width="700" height="731" alt="image" src="https://github.com/user-attachments/assets/94a100c2-c62b-4121-b00e-040fa15ee6a0" />
 
 
 Worker in frame, helmet nowhere in sight
 
 
-<img width="1280" height="718" alt="image" src="https://github.com/user-attachments/assets/c50c0a32-173c-4b72-bb0b-21971cef7f08" />
+<img width="700" height="718" alt="image" src="https://github.com/user-attachments/assets/c50c0a32-173c-4b72-bb0b-21971cef7f08" />
 
 
 
@@ -86,17 +86,17 @@ Flask serves a web dashboard over the local network. Video streams via **MJPEG**
 Multiple workers can be registered and monitored in separate sessions. Any device on the same network can watch.
 
 
-<img width="1280" height="727" alt="image" src="https://github.com/user-attachments/assets/260a8b6b-21c5-4acf-9811-aebc40bc5bbe" />
+<img width="700" height="727" alt="image" src="https://github.com/user-attachments/assets/260a8b6b-21c5-4acf-9811-aebc40bc5bbe" />
 
 Registering a new worker.
 
 
-<img width="1280" height="728" alt="image" src="https://github.com/user-attachments/assets/322a8aeb-8345-4768-886d-77ce556fe80a" />
+<img width="700" height="728" alt="image" src="https://github.com/user-attachments/assets/322a8aeb-8345-4768-886d-77ce556fe80a" />
 
 Active session: fatigue score, heart rate, respiration, SpO₂, PERCLOS, EAR, blink count, microsleeps, and yawns — all live, all in one view. Alerts log on the left as they fire.
 
 
-<img width="1280" height="731" alt="image" src="https://github.com/user-attachments/assets/2c240f34-c760-4a2e-bf39-9e0c30232c2a" />
+<img width="700" height="731" alt="image" src="https://github.com/user-attachments/assets/2c240f34-c760-4a2e-bf39-9e0c30232c2a" />
 
 ---
 
