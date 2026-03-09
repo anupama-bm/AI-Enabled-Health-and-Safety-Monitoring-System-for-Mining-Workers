@@ -25,7 +25,7 @@ except ImportError:
 
 # ── Thresholds ────────────────────────────────────────────────────────────────
 EAR_THRESHOLD           = 0.21
-CONSEC_FRAMES_MICROSLEEP= 18          # ~0.6 s @ 30 fps
+CONSEC_FRAMES_MICROSLEEP= 18
 MAR_YAWN_THRESHOLD      = 0.50
 MAR_SUSTAIN_TIME        = 0.8
 MAR_SLOPE_WINDOW        = 0.8
@@ -33,13 +33,13 @@ MAR_SLOPE_MAX           = 0.9
 YAWN_MIN_SEPARATION     = 2.5
 PERCLOS_WINDOW_SEC      = 60.0
 
-# Blink — tuned for real faces
-BLINK_EAR_DROP_RATIO    = 0.72        # closed  when EAR < baseline × 0.72
+
+BLINK_EAR_DROP_RATIO    = 0.72
 BLINK_MIN_FRAMES        = 2
 BLINK_MAX_FRAMES        = 12
-BLINK_MIN_SEPARATION_MS = 120         # ms between blinks — allows fast consecutive blinks
+BLINK_MIN_SEPARATION_MS = 120
 
-# Resp / rPPG
+
 RESP_BUFFER_SEC  = 30.0
 FLOW_ROI_REL     = (0.35, 0.6, 0.30, 0.25)
 RESP_MIN_BPM     = 6
@@ -50,14 +50,14 @@ HR_MAX_BPM       = 180
 SPO2_WINDOW_SEC  = 15.0
 
 # PPE
-PPE_MODEL_PATH              = 'yolov8n.pt'
+PPE_MODEL_PATH              = 'best.pt'
 PPE_CONFIDENCE_THRESHOLD    = 0.40
 PPE_ALERT_ENABLED           = True
 PPE_ON_RATIO                = 0.40
 PPE_OFF_RATIO               = 0.25
 
 # EMA / weights
-EAR_EMA_ALPHA    = 0.60   # SLOWER → smoother EAR, fewer false blinks from noise
+EAR_EMA_ALPHA    = 0.60
 FATIGUE_EMA_ALPHA= 0.12
 WEIGHT_EYE       = 0.45
 WEIGHT_YAWN      = 0.30
@@ -83,8 +83,6 @@ MOUTH_LEFT_IDX  = 78
 MOUTH_RIGHT_IDX = 308
 FOREHEAD_POINTS = [10, 338, 297, 332]
 
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
 def safe_div(a, b):
     return a / b if b != 0 else 0.0
 
@@ -115,7 +113,6 @@ def mouth_aspect_ratio(landmarks, w, h):
     return safe_div(euclid(up,low), euclid(lft,rgt))
 
 
-# ── Alert Manager ─────────────────────────────────────────────────────────────
 class AlertManager:
     def __init__(self):
         self.alerts_history = deque(maxlen=100)
@@ -143,14 +140,8 @@ class AlertManager:
             self.last_alerts.clear()
 
 
-# ── Blink Detector (rewritten) ────────────────────────────────────────────────
 class BlinkDetector:
-    """
-    Adaptive-baseline detector.
-    Baseline = rolling 80th-percentile of open-eye EAR samples.
-    A blink is: EAR drops below baseline×DROP_RATIO for 2–12 frames,
-    then reopens, with ≥250 ms since the last confirmed blink.
-    """
+
     def __init__(self):
         self.count         = 0
         self.closed_frames = 0
@@ -158,12 +149,10 @@ class BlinkDetector:
         self._in_blink     = False
         self._last_blink_ts= 0.0
 
-        # Baseline tracking — only "open" samples
+
         self._baseline_buf = deque(maxlen=150)
         self.baseline      = 0.28
         self.threshold     = 0.20
-
-    # ── internal ──────────────────────────────────────────────────────────────
     def _update_baseline(self, ear_avg):
         """Feed open-eye samples to baseline."""
         if ear_avg > self.threshold:          # only open-eye samples
@@ -197,9 +186,6 @@ class BlinkDetector:
                     print(f"[BLINK] #{self.count}  dur={self.closed_frames}f  gap={gap_ms:.0f}ms  "
                           f"ear={ear:.3f}  thr={self.threshold:.3f}  base={self.baseline:.3f}")
                 elif dur_ok and not gap_ok:
-                    # Gap too short but closure was valid — still count it,
-                    # just update timestamp so the next one starts fresh.
-                    # This is the consecutive-blink case.
                     self.count += 1
                     self._last_blink_ts = ts
                     blink_detected = True
@@ -228,6 +214,9 @@ class YOLOPPEDetector:
         # Temporal smoothing
         self._history = {k: deque(maxlen=8) for k in self._ITEMS}
         self.current_state = {k: False for k in self._ITEMS}
+
+        # FIX: track last time a person was seen to enable instant PPE clear
+        self._person_present = False
 
         if YOLO_AVAILABLE:
             self._load_model(model_path)
@@ -294,20 +283,39 @@ class YOLOPPEDetector:
         with self._lock: return self.current_state.copy()
 
     def force_person(self, val: bool):
-        """Called by face-mesh path so person detection is instant."""
+        """
+        Called by face-mesh path so person detection is instant.
+        FIX: When person leaves (val=False), immediately clear ALL PPE states
+        and flush their histories — no need to wait for the smoothing buffer
+        to drain (~5 s). This gives instant feedback when the worker steps away.
+        """
         with self._lock:
             self._history['person'].append(1 if val else 0)
             h = self._history['person']
             if len(h) >= 2:
                 r = sum(h) / len(h)
-                if val and r >= 0.50:   self.current_state['person'] = True
-                if not val and r <= 0.25: self.current_state['person'] = False
+                if val and r >= 0.50:
+                    self.current_state['person'] = True
+                if not val and r <= 0.25:
+                    self.current_state['person'] = False
+
+            # ── FIX: instant clear of all PPE when no person present ──────
+            was_present = self._person_present
+            self._person_present = val
+
+            if was_present and not val:
+                # Person just left — immediately reset all PPE items
+                for k in self._ITEMS:
+                    if k != 'person':
+                        self._history[k].clear()
+                        self.current_state[k] = False
 
     def reset(self):
         with self._lock:
             for k in self._ITEMS:
                 self._history[k].clear()
                 self.current_state[k] = False
+            self._person_present = False
 
     def draw(self, frame, state):
         if not self.is_available: return frame
@@ -552,7 +560,6 @@ class VideoProcessor:
             stats['blink_count'] = self.blink_detector.get_count()
 
             # ── Microsleep (long eye-closure) ──────────────────────────────
-            # Uses raw EAR so transient noise doesn't clear the streak
             if raw_ear is not None and raw_ear < self.ear_threshold:
                 self._closed_streak += 1
             else:
@@ -719,11 +726,10 @@ class MonitoringSystem:
             if not m: return {"status":"error","message":"Miner not found"}
             self.cap = cv2.VideoCapture(0)
             if not self.cap.isOpened(): return {"status":"error","message":"Cannot open webcam"}
-            # Camera settings
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
             self.cap.set(cv2.CAP_PROP_FPS,          30)
-            self.cap.set(cv2.CAP_PROP_BUFFERSIZE,   1)    # ← KEY: 1-frame buffer = no lag
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE,   1)
             self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
             self.cur_miner  = miner_id
             self.is_running = True
@@ -765,18 +771,10 @@ class MonitoringSystem:
 
     # ── Main capture/processing loop ──────────────────────────────────────────
     def _loop(self):
-        """
-        CRITICAL LATENCY FIX:
-        We grab() to drain the buffer on every iteration, then retrieve()
-        only when we actually want to process. This decouples capture rate
-        from processing rate and eliminates the classic 'webcam lag' bug.
-        """
         while self.is_running:
-            # Drain: grab without decoding (very fast)
             if not self.cap.grab():
                 time.sleep(0.005); continue
 
-            # Decode the latest grabbed frame
             ret, frame = self.cap.retrieve()
             if not ret: continue
 
@@ -873,10 +871,6 @@ def mon_status(): return jsonify({"is_monitoring": sys.active()})
 
 # ── Streaming ─────────────────────────────────────────────────────────────────
 def gen_frames():
-    """
-    Lag-free MJPEG stream.
-    Encodes at moderate quality; skips if the frame hasn't changed.
-    """
     enc_params = [cv2.IMWRITE_JPEG_QUALITY, 55]
     last_id    = None
     while True:
@@ -967,7 +961,7 @@ HTML_TEMPLATE = '''
         <p>AI-Enabled Health & Safety Monitoring for Mining Workers</p>
     </div>
     <div class="actions-bar">
-        <div class="search-box"><input type="text" id="searchInput" placeholder="🔍 Search miners by name or ID..."></div>
+        <div class="search-box"><input type="text" id="searchInput" placeholder="Search miners by name or ID..."></div>
         <button class="btn btn-primary" onclick="openAdd()">+ Add New Miner</button>
     </div>
     <div id="minersContainer" class="miners-grid"></div>
@@ -999,7 +993,7 @@ function load(){
 function render(miners){
     const c=document.getElementById('minersContainer');
     if(!miners.length){
-        c.innerHTML=`<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">👷</div><h3>No Miners Found</h3><p>Add your first miner to start monitoring</p><button class="btn btn-primary" onclick="openAdd()">+ Add</button></div>`;
+        c.innerHTML=`<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon"></div><h3>No Miners Found</h3><p>Add your first miner to start monitoring</p><button class="btn btn-primary" onclick="openAdd()">+ Add</button></div>`;
         return;
     }
     c.innerHTML=miners.map(m=>`
@@ -1012,7 +1006,7 @@ function render(miners){
                 <div class="detail-item"><div class="detail-label">Shift</div><div class="detail-value">${m.shift}</div></div>
                 <div class="detail-item"><div class="detail-label">Gender</div><div class="detail-value">${m.gender}</div></div>
             </div>
-            <button class="monitor-btn" onclick="location.href='/monitor/${m.id}'">🎥 Start Monitoring</button>
+            <button class="monitor-btn" onclick="location.href='/monitor/${m.id}'"> Start Monitoring</button>
         </div>`).join('');
 }
 function openAdd(){document.getElementById('addModal').classList.add('active');}
@@ -1082,14 +1076,37 @@ MONITOR_TEMPLATE = '''
         .det-label{font-size:11px;color:#9ca3af;margin-bottom:5px;text-transform:uppercase;}
         .det-val{font-size:21px;font-weight:700;color:#fff;}
         .det-val.ok{color:#10b981;} .det-val.warn{color:#f59e0b;} .det-val.bad{color:#ef4444;}
-        .ppe-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;}
-        .ppe-item{background:rgba(255,255,255,.04);border-radius:9px;padding:11px;border:1px solid rgba(255,255,255,.08);text-align:center;}
-        .ppe-item.yes{border-color:#10b981;background:rgba(16,185,129,.1);}
-        .ppe-item.no{border-color:#ef4444;background:rgba(239,68,68,.1);}
-        .ppe-icon{font-size:26px;margin-bottom:6px;}
-        .ppe-lbl{font-size:11px;color:#9ca3af;text-transform:uppercase;margin-bottom:3px;}
-        .ppe-st{font-size:13px;font-weight:700;}
-        .ppe-st.yes{color:#10b981;} .ppe-st.no{color:#ef4444;}
+
+        /* ── PPE Grid: fixed layout so cards stay compact and horizontal ── */
+        .ppe-grid{
+            display:grid;
+            grid-template-columns:repeat(3,1fr);
+            grid-auto-rows:90px;        /* fixed row height — prevents tall cards */
+            gap:10px;
+            align-items:stretch;
+        }
+        .ppe-item{
+            background:rgba(255,255,255,.04);
+            border-radius:10px;
+            padding:10px 8px;
+            border:1px solid rgba(255,255,255,.08);
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            justify-content:center;
+            gap:4px;
+            text-align:center;
+            min-height:0;               /* override any implicit stretch */
+            overflow:hidden;
+        }
+        .ppe-item.yes{border-color:#10b981;background:rgba(16,185,129,.12);}
+        .ppe-item.no {border-color:#ef4444;background:rgba(239,68,68,.12);}
+        .ppe-icon{font-size:22px;line-height:1;flex-shrink:0;}
+        .ppe-lbl{font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;line-height:1;}
+        .ppe-st{font-size:12px;font-weight:700;line-height:1;}
+        .ppe-st.yes{color:#10b981;}
+        .ppe-st.no {color:#ef4444;}
+
         .chart-box{background:rgba(255,255,255,.03);padding:18px;border-radius:10px;height:340px;}
         .no-alerts{text-align:center;padding:25px;color:#6b7280;font-style:italic;}
         h2{font-size:17px;color:#fff;margin-bottom:13px;}
@@ -1112,16 +1129,16 @@ MONITOR_TEMPLATE = '''
             <a href="/" class="back-btn">← Back</a>
         </div>
         <div class="controls">
-            <button class="btn btn-start" onclick="startMon()">▶ Start</button>
-            <button class="btn btn-stop"  onclick="stopMon()">⏹ Stop</button>
-            <button class="btn btn-reset" onclick="resetMon()">🔄 Reset</button>
-            <span class="badge badge-inactive" id="badge">● INACTIVE</span>
+            <button class="btn btn-start" onclick="startMon()">Start</button>
+            <button class="btn btn-stop"  onclick="stopMon()">Stop</button>
+            <button class="btn btn-reset" onclick="resetMon()"> Reset</button>
+            <span class="badge badge-inactive" id="badge">INACTIVE</span>
         </div>
     </div>
 
     <!-- Sidebar -->
     <div class="alerts-panel">
-        <h2>🚨 Alerts</h2>
+        <h2> Alerts</h2>
         <div id="alertsList"><div class="no-alerts">No alerts yet</div></div>
     </div>
 
@@ -1130,13 +1147,13 @@ MONITOR_TEMPLATE = '''
         <div class="top-row">
             <!-- Video -->
             <div class="panel">
-                <h2>📹 Live Feed</h2>
+                <h2>Live Feed</h2>
                 <div class="video-box" id="vbox"><div class="placeholder">Click Start to begin</div></div>
             </div>
             <!-- Metrics -->
             <div class="panel">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:13px;">
-                    <h2 style="margin:0;">🎯 Fatigue Metrics</h2>
+                    <h2 style="margin:0;"> Fatigue Metrics</h2>
                     <span class="person-badge no" id="personBadge">No Person</span>
                 </div>
                 <div class="det-grid">
@@ -1146,9 +1163,9 @@ MONITOR_TEMPLATE = '''
                     <div class="det-item"><div class="det-label">SpO₂ (%)</div><div class="det-val" id="v-spo2">--</div></div>
                     <div class="det-item"><div class="det-label">PERCLOS</div><div class="det-val" id="v-perclos">--</div></div>
                     <div class="det-item"><div class="det-label">EAR</div><div class="det-val" id="v-ear">--</div></div>
-                    <div class="det-item"><div class="det-label">Blinks ✨</div><div class="det-val" id="v-blink">--</div></div>
-                    <div class="det-item"><div class="det-label">Microsleeps 😴</div><div class="det-val" id="v-ms">--</div></div>
-                    <div class="det-item"><div class="det-label">Yawns 🥱</div><div class="det-val" id="v-yawn">--</div></div>
+                    <div class="det-item"><div class="det-label">Blinks </div><div class="det-val" id="v-blink">--</div></div>
+                    <div class="det-item"><div class="det-label">Microsleeps </div><div class="det-val" id="v-ms">--</div></div>
+                    <div class="det-item"><div class="det-label">Yawns </div><div class="det-val" id="v-yawn">--</div></div>
                     <div class="det-item"><div class="det-label">MAR</div><div class="det-val" id="v-mar">--</div></div>
                 </div>
             </div>
@@ -1156,20 +1173,20 @@ MONITOR_TEMPLATE = '''
 
         <!-- PPE -->
         <div class="panel">
-            <h2>🦺 PPE Status</h2>
+            <h2> PPE Status</h2>
             <div class="ppe-grid">
-                <div class="ppe-item" id="p-person"><div class="ppe-icon">👤</div><div class="ppe-lbl">Person</div><div class="ppe-st">--</div></div>
-                <div class="ppe-item" id="p-helmet"><div class="ppe-icon">⛑️</div><div class="ppe-lbl">Helmet</div><div class="ppe-st">--</div></div>
-                <div class="ppe-item" id="p-goggles"><div class="ppe-icon">🥽</div><div class="ppe-lbl">Goggles</div><div class="ppe-st">--</div></div>
-                <div class="ppe-item" id="p-vest"><div class="ppe-icon">🦺</div><div class="ppe-lbl">Vest</div><div class="ppe-st">--</div></div>
-                <div class="ppe-item" id="p-gloves"><div class="ppe-icon">🧤</div><div class="ppe-lbl">Gloves</div><div class="ppe-st">--</div></div>
-                <div class="ppe-item" id="p-boots"><div class="ppe-icon">🥾</div><div class="ppe-lbl">Boots</div><div class="ppe-st">--</div></div>
+                <div class="ppe-item" id="p-person"> <div class="ppe-icon"></div><div class="ppe-lbl">Person</div> <div class="ppe-st">--</div></div>
+                <div class="ppe-item" id="p-helmet"> <div class="ppe-icon">️</div><div class="ppe-lbl">Helmet</div> <div class="ppe-st">--</div></div>
+                <div class="ppe-item" id="p-goggles"><div class="ppe-icon"></div><div class="ppe-lbl">Goggles</div><div class="ppe-st">--</div></div>
+                <div class="ppe-item" id="p-vest">   <div class="ppe-icon"></div><div class="ppe-lbl">Vest</div>   <div class="ppe-st">--</div></div>
+                <div class="ppe-item" id="p-gloves"> <div class="ppe-icon"></div><div class="ppe-lbl">Gloves</div> <div class="ppe-st">--</div></div>
+                <div class="ppe-item" id="p-boots">  <div class="ppe-icon"></div><div class="ppe-lbl">Boots</div>  <div class="ppe-st">--</div></div>
             </div>
         </div>
 
         <!-- Chart -->
         <div class="panel">
-            <h2>📊 Real-Time Metrics</h2>
+            <h2>Real-Time Metrics</h2>
             <div class="chart-box"><canvas id="chart"></canvas></div>
         </div>
     </div>
@@ -1326,15 +1343,15 @@ if __name__ == '__main__':
     print("⛏️  MINER MONITORING SYSTEM")
     print("="*70)
     if not YOLO_AVAILABLE:
-        print("⚠️  YOLOv8 not available (pip install ultralytics)")
+        print(" YOLOv8 not available (pip install ultralytics)")
     elif not os.path.exists(PPE_MODEL_PATH):
-        print(f"⚠️  YOLO model not found at {PPE_MODEL_PATH}")
+        print(f" YOLO model not found at {PPE_MODEL_PATH}")
     else:
         print(f"✓  YOLO model: {PPE_MODEL_PATH}")
-    print("\n📡 http://localhost:5003")
+    print("\n http://localhost:5003")
     print("="*70+"\n")
     try:
         app.run(host='0.0.0.0', port=5003, debug=False, threaded=True)
     except KeyboardInterrupt:
-        print("\n🛑 Stopped")
+        print("\n Stopped")
         if sys.active(): sys.stop()
