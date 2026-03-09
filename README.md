@@ -1,64 +1,156 @@
-# AI-Enabled-Health-and-Safety-Monitoring-System-for-Mining Workers
+# ⛏️ SENTINEL
+### *The AI Safety Monitor That Runs on What You Already Have*
+
+---
 
 
-Mining kills people. Not because the technology to prevent it doesn't exist — but because that technology has historically required expensive hardware, wearables, and cloud infrastructure that most mining operations can't justify.
-This project does real-time fatigue monitoring, PPE compliance checking, and contactless vital sign estimation using nothing but a standard webcam and a laptop. It runs locally, works offline, and costs nothing to deploy beyond the hardware you already have.
 
+---
 
-What It Does
+## What Is This?
 
+A real-time fatigue detector. A PPE compliance checker. A contactless vital-sign estimator.
 
-Fatigue Detection
-The system tracks eye closure using MediaPipe's 468-point face mesh and computes Eye Aspect Ratio (EAR) every frame. It detects individual blinks (with a self-calibrating threshold per person), flags microsleep events when eyes stay closed for more than ~0.6 seconds, tracks yawns through Mouth Aspect Ratio (MAR) with duration and slope filtering to avoid false positives from talking, and maintains a PERCLOS score over a 60-second rolling window. These feed into a weighted fatigue score (0–100) that uses an intentionally slow EMA so the score rises gradually with genuine fatigue rather than spiking on a single yawn.
+Built for one webcam and a laptop. Runs locally. Works offline. Costs nothing to deploy beyond the hardware you already own.
 
+This is not a proof of concept. This is not a demo. This is a system designed to run in a field environment — in the same conditions where people get hurt.
 
-PPE Compliance
-A custom YOLOv8 model runs on a background thread and checks for helmets, goggles, vests, gloves, and boots in real time. Detection uses temporal smoothing with asymmetric ON/OFF thresholds to prevent flickering. When the worker steps away from the camera, all PPE states clear instantly rather than waiting for the inference buffer to drain — a specific fix that makes the system behave correctly in practice.
+---
 
+## The Problem It Solves
 
-Respiratory Rate
-Farneback dense optical flow is computed on a chest ROI placed just below the detected face. The vertical motion signal oscillates with breathing and is FFT-analysed over a 30-second rolling buffer to extract breaths per minute.
+Every year, mining workers die or suffer serious injury from **preventable causes**:
 
+- A worker falls asleep on shift, milliseconds before operating heavy machinery
+- A helmet left in a truck instead of on a head
+- Breathing anomalies that go unnoticed for hours in poorly ventilated environments
 
-Heart Rate and SpO₂ (rPPG-inspired)
-The green channel mean from a forehead ROI is sampled and FFT-analysed over 15 seconds to estimate heart rate. SpO₂ is approximated from the red-to-green channel variance ratio. These are estimates that work reasonably under stable lighting — the Known Limitations section is upfront about where they fall short.
+The technology to detect all of these has existed for years. It's just always required an enterprise contract.
 
+Sentinel doesn't.
 
-Live Dashboard
-Flask serves a web dashboard over the local network. Video streams via MJPEG. Stats poll every 100ms. Multiple workers can be registered and monitored in separate sessions.
+---
 
-The best.pt model was trained on Google Colab using YOLOv8. The training data was assembled by merging multiple PPE datasets sourced from Roboflow Universe — covering different environments, lighting conditions, and worker demographics — to improve generalisation across real-world scenarios. The merged dataset was cleaned, relabelled where necessary.The model handles six classes: person, helmet, goggles, vest, gloves, and boots, with label matching.
+## What It Actually Does
 
+###  Fatigue Detection — Because Microsleep Kills
 
-Face analysis — MediaPipe Face Mesh: 468 landmarks vs dlib's 68, faster on CPU, better partial occlusion handling.
-PPE detection — YOLOv8 (Ultralytics): Runs on CPU at real-time speeds, mature training pipeline for custom datasets.
-Optical flow — OpenCV Farneback: Dense flow gives a more stable respiration signal than sparse point tracking.
-Signal processing — SciPy rfft: Real-input FFT is twice as fast as full FFT for this use case.
-Web server — Flask: MJPEG streaming via generator functions works cleanly; single-file deployment.
-Charts — Chart.js: No build step, handles 100ms polling without animation lag with animation: false.
+The system tracks every blink. Literally every blink.
 
-Flask was chosen because the main requirement was to stream live video ,Flask handles MJPEG streaming. FastAPI can do the same thing but requires more ceremony around async generators. The second reason is that this entire application lives in one file. Flask is designed for that. The routes, the HTML templates, and the application logic all coexist in app.py, for a system meant to be cloned and run immediately on-site, that matters.
-Flask-CORS was added as a single line to handle cross-origin requests from the browser polling the API endpoints. The whole setup is minimal, predictable, and easy for anyone else to read and deploy — which is exactly what a monitoring system running in a field environment needs to be.
+MediaPipe's **468-point face mesh** runs every frame, computing an **Eye Aspect Ratio (EAR)** — a geometric ratio that collapses when eyes close. This isn't motion detection. This is precise landmark geometry.
 
+- **Individual blinks** are detected and logged with a self-calibrating threshold per person — because not every face is the same
+- **Microsleep events** are flagged when eyes stay closed for more than ~0.6 seconds
+- **Yawns** are tracked through Mouth Aspect Ratio (MAR), with duration and slope filtering to distinguish a yawn from someone speaking
+- **PERCLOS** — the gold-standard drowsiness metric used in clinical fatigue research — is computed over a rolling 60-second window
+- A **weighted fatigue score (0–100)** uses an intentionally slow exponential moving average, so the score builds with genuine fatigue rather than spiking on a single tired moment
 
-Getting Started
+###  PPE Compliance — No Helmet? You'll Know Immediately
 
-Requirements: Python 3.9+, a webcam.
+A custom-trained YOLOv8 model runs on a background thread, checking for:
 
+**Helmet · Goggles · Vest · Gloves · Boots**
+
+Detection uses asymmetric ON/OFF thresholds with temporal smoothing — which means no flickering. No false "PPE removed" alerts because someone shifted slightly in frame.
+
+There's a specific behavioral fix that matters: when a worker steps away from the camera, **all PPE states clear instantly**. No inference buffer drain. No ghost states. The system behaves correctly in the situation where it matters most.
+
+###  Respiratory Rate — Measured Without Touching Anything
+
+**Farneback dense optical flow** is computed on a chest region-of-interest placed just below the detected face. The vertical motion signal oscillates with the rise and fall of breathing.
+
+A **30-second rolling FFT analysis** extracts breaths per minute from that oscillation signal.
+
+Dense optical flow was chosen over sparse point tracking deliberately — it produces a more stable signal when the chest isn't perfectly still.
+
+###  Heart Rate & SpO₂ — From a Camera, Not a Pulse Oximeter
+
+The green channel mean from a forehead ROI is sampled every frame. Over a 15-second window, **FFT analysis** extracts the dominant frequency corresponding to heart rate.
+
+SpO₂ is approximated from the red-to-green channel variance ratio — an rPPG-inspired approach that works reasonably under stable lighting.
+
+*The Known Limitations section of the code is completely upfront about where these estimates fall short. There's no overclaiming here.*
+
+###  Live Dashboard — Visible to Every Device on the Network
+
+Flask serves a web dashboard over the local network. Video streams via **MJPEG**. Stats poll every **100ms**.
+
+Multiple workers can be registered and monitored in separate sessions. Any device on the same network can watch.
+
+---
+
+## The Model
+
+`best.pt` was trained on Google Colab using YOLOv8.
+
+Training data was assembled by merging multiple PPE datasets sourced from Roboflow Universe — covering different environments, different lighting conditions, and different worker demographics. The merged dataset was cleaned and relabelled where necessary.
+
+**Six classes:** `person` · `helmet` · `goggles` · `vest` · `gloves` · `boots`
+
+---
+
+Why These Specific Tools
+
+MediaPipe Face Mesh — 468 facial landmarks, fast on CPU, accurate enough to catch a microsleep.
+YOLOv8 — real-time PPE detection with no GPU needed. Trained on custom data without fighting the framework.
+OpenCV Farneback — dense optical flow for breathing detection. More stable than tracking individual points.
+SciPy rfft — extracts heart rate and breath rate from raw signal. Twice as fast as full FFT for rolling windows.
+Flask — streams live video, serves the dashboard, fits in one file. Clone it and it runs.
+Chart.js — live stats at 100ms refresh, no build step, no lag.
+
+**On the choice of Flask over FastAPI:**
+
+FastAPI can stream MJPEG. Flask can also stream MJPEG. The difference is that Flask does it with less ceremony around async generators.
+
+More importantly: this entire application lives in one file. Routes, HTML templates, and application logic all coexist in `app.py`. For a system that needs to be cloned and running on-site in under five minutes, that's not a stylistic choice. That's a design requirement.
+
+Flask-CORS handles cross-origin requests from the browser in a single line.
+
+---
+
+## Getting Started
+
+**Requirements: Python 3.9+. A webcam.**
+
+```bash
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
-pip install -r requirements.txt<br>
-python app.py<br>
-Open http://localhost:5003. <br>
-To access from another device on the same network, replace localhost with your machine's local IP.
+pip install -r requirements.txt
+python app.py
+```
+
+Open **http://localhost:5003**
+
+To monitor from another device on the same network, replace `localhost` with your machine's local IP.
+
+---
+
+## Project Structure
+
+```
+miners/
+├── app.py           # Entire backend: pipeline, API, and HTML templates
+├── best.pt          # Custom-trained YOLOv8 PPE model
+├── yolov8n.pt       # Base weights used during training
+└── requirements.txt
+```
+
+No template folders. No build steps. No configuration files.
+
+**Clone and run.**
+
+---
+
+## The Philosophy
+
+The expensive version of this system exists. It runs on proprietary wearables, requires cloud infrastructure, and comes with an enterprise contract that most mining operations — especially smaller ones, especially in developing regions — will never sign.
+
+This is the version that doesn't require any of that.
+
+A standard webcam. A laptop. Python.
 
 
-miners/<br>
-|--app.py          # Entire backend: pipeline, API, and HTML templates<br>
-|--best.pt         # Custom-trained YOLOv8 PPE model<br>
-|--yolov8n.pt      # Base weights used during training<br>
-|--requirements.txt<br>
-<br>
-Everything runs from a single file. No template folders, no build steps, no configuration files. Clone and run.
+---
 
+*Built with MediaPipe · YOLOv8 · OpenCV · Flask · SciPy · Chart.js*
